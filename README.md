@@ -41,7 +41,7 @@ The immediate motivation is [**MLQE**](https://github.com/overshiki/mlqe/blob/ma
 |--------|----------------|
 | `CamlParser.Lexer.Lexer` | Tokenizes source text; merges core + plugin keywords |
 | `CamlParser.Syntax.Expr` / `Pattern` / `Decl` | Core AST with `EExt` / `DExt` extension hooks |
-| `CamlParser.Parser.Expr` | Full precedence ladder: `let` → `if` → `,` → `\|\|` → `&&` → `=` → `::` → `+` → `*` → `**` → application → atoms |
+| `CamlParser.Parser.Expr` | Full precedence ladder: `let` → `;` → `:=` → `if` → `,` → `\|\|` → `&&` → `not` → comparisons → `@` → `::` → `+` → `*` → `**` → unary `-` → application → projections → atoms |
 | `CamlParser.Plugin.Interface` | `CamlParserPlugin` record: name, keywords, optional expr atom parser, optional declaration parser |
 | `CamlParser.Parser.Assembly` | Combines lexer + plugins + parser into a runnable pipeline |
 | `MLQE.Plugin` | Example plugin implementing `qdef` declarations and quantum expression syntax |
@@ -94,11 +94,11 @@ cabal build
 ### Running Tests
 
 ```bash
-# Full suite (20 tests)
+# Full suite (88 tests)
 cabal test
 
-# Single test
-cabal test --test-options="-p '/qdef abstract/'"
+# Single test (tasty awk patterns)
+cabal test --test-options="-p 'qdef abstract'"
 ```
 
 ### Interactive Exploration
@@ -137,21 +137,25 @@ See [`src/MLQE/Plugin.hs`](./src/MLQE/Plugin.hs) for a complete working example.
 
 ## Test Suite
 
-The test suite lives in [`test/Main.hs`](./test/Main.hs) and is organized into four groups:
+The test suite lives in [`test/Main.hs`](./test/Main.hs) and covers the full Caml-Light grammar plus plugin extensibility:
 
 | Group | Count | Coverage |
 |-------|-------|----------|
-| **Lexer** | 7 | Integers, identifiers, keywords, operators, strings, comments, plugin keyword registration |
-| **Expression Parser** | 7 | Literals, `let/in`, `if/then/else`, application, tuples, binary ops, list literals |
-| **Declaration Parser** | 4 | `let`, `let rec`, `type` variants, `exception` |
-| **MLQE Plugin** | 2 | Abstract `qdef` (`: type`), concrete `qdef` (`= expr`) |
+| **Lexer** | 15 | Integers (decimal, hex, octal, binary), floats (including `5.` and exponent notation), identifiers with accents/underscores, keyword boundaries, multi-character symbols (`->`, `::`, `:=`, `.[`, etc.), string/char escapes, nested comments, plugin keyword registration |
+| **Expression Parser** | 28 | Literals, `let/in` (nested, multiple bindings, `rec`, mutual, `where`), `if/then/else` (dangling else), `fun`, `function`, `match`, `try`, sequences, assignments, full precedence/associativity (left for `+`/`-`/`*`/`@`; right for `::`/`**`/`@`), unary `-` / `-.`, curried application, tuples, list literals, vector/string projections |
+| **Pattern Parser** | 10 | Wildcard, variables, constants, tuples, constructor application, cons (`::`) right-associative, list sugar, or-patterns (`\|`), aliases, record patterns |
+| **Type Parser** | 6 | Variables, arrows (right-assoc), tuples (`*`), constructors (including multi-param `(int, string) either`), abbreviations |
+| **Declaration Parser** | 11 | `let`/`let rec`, `type` (variant, record, abbreviation, parameterized), `exception` (with/without args), multiple `and`-separated decls, directives (`#open`), tuple patterns in bindings |
+| **Projections & Assignments** | 5 | Record access (`r.field`), vector index (`v.(i)`), string index (`s.[i]`), reference assign (`:=`), record field update (`<-`) |
+| **Plugin Integration** | 7 | Non-interference (same AST with/without plugin), keyword presence/absence, abstract/concrete/parameterized `qdef`, multiple plugins |
+| **Negative Tests** | 6 | Unclosed strings/comments, unmatched parens, missing `in`, trailing `else`, missing operand |
 
 Run all tests:
 
 ```bash
 $ cabal test
 …
-All 20 tests passed (0.01s)
+All 88 tests passed (0.02s)
 Test suite caml-parser-test: PASS
 ```
 

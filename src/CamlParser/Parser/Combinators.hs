@@ -96,6 +96,9 @@ infixOpP level = matchTok test <?> ("infix operator level " ++ show level)
   where
     test (TokInfix l s) | l == level = Just s
     test (TokStar)      | level == 3 = Just "*"
+    test (TokSubtractive s) | level == 2 = Just s
+    test TokEqual       | level == 0 = Just "="
+    test TokEqualEqual  | level == 0 = Just "=="
     test _ = Nothing
 
 prefixOpP :: Parser String

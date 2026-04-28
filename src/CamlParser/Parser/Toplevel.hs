@@ -29,11 +29,11 @@ parseIntf = TIntf <$> parseIntfPhrase
 
 parseImplPhrase :: Parser (Decl Expr Pattern)
 parseImplPhrase = choice
-  [ parseLetDef
-  , parseTypeDef
-  , parseExcDef
-  , parseDirective
-  , parseExprDef
+  [ try parseExprDef
+  , try parseLetDef
+  , try parseTypeDef
+  , try parseExcDef
+  , try parseDirective
   ]
 
 parseExprDef :: Parser (Decl Expr Pattern)
@@ -86,13 +86,13 @@ parseTypeVar = tok TokQuote >> identP
 
 parseTypeDefBody :: Parser TypeDecl
 parseTypeDefBody = choice
-  [ do equal
-       optionalBar
-       TDVariant <$> sepBy1 parseConstrDecl bar
-  , do equal
-       TDRecord <$> braces (sepBy1 parseLabelDecl semi)
-  , do tok TokEqualEqual
-       TDAbbrev <$> parseType
+  [ try $ do equal
+             optionalBar
+             TDVariant <$> sepBy1 parseConstrDecl bar
+  , try $ do equal
+             TDRecord <$> braces (sepBy1 parseLabelDecl semi)
+  , try $ do tok TokEqualEqual
+             TDAbbrev <$> parseType
   , return TDAbstract
   ]
 

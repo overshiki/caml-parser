@@ -78,7 +78,27 @@ intLiteral = lexeme $ TokInt <$> choice
   ]
 
 floatLiteral :: Lexer Token
-floatLiteral = lexeme $ TokFloat <$> L.float
+floatLiteral = lexeme $ TokFloat <$> choice
+  [ try L.float
+  , do n <- L.decimal
+       _ <- char '.'
+       frac <- many digitChar
+       exp <- optional $ try $ do
+         _ <- oneOf "eE"
+         sign <- optional (oneOf "+-")
+         e <- L.decimal
+         return $ case sign of
+           Just '-' -> negate (fromIntegral e)
+           _        -> fromIntegral e
+       let base = fromIntegral n + readFrac frac
+           mult = case exp of
+             Just e  -> 10 ** e
+             Nothing -> 1.0
+       return $ base * mult
+  ]
+  where
+    readFrac "" = 0.0
+    readFrac ds = read ('0':'.':ds) / 10 ^^ length ds
 
 stringLiteral :: Lexer Token
 stringLiteral = lexeme $ TokString <$> (char '"' *> many stringChar <* char '"')
@@ -123,14 +143,14 @@ operatorOrSymbol = lexeme $ choice $ map try
   , TokQuote <$ string "'"
   , TokLParen <$ string "("
   , TokRParen <$ string ")"
-  , TokStar <$ string "*"
+  , TokStar <$ try (string "*" <* notFollowedBy camlSymbolChar)
   , TokComma <$ string ","
   , TokDot <$ string "."
   , TokColon <$ string ":"
   , TokSemi <$ string ";"
   , TokLBracket <$ string "["
   , TokRBracket <$ string "]"
-  , TokUnderscore <$ string "_"
+  , TokUnderscore <$ try (string "_" <* notFollowedBy (alphaNumChar <|> char '_' <|> char '\''))
   , TokLBrace <$ string "{"
   , TokBar <$ string "|"
   , TokRBrace <$ string "}"

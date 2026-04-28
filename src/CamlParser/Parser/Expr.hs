@@ -209,9 +209,16 @@ parseNotExpr = choice
   ]
 
 parseCmpExpr :: Parser Expr
-parseCmpExpr = parseLeftAssocOp [0] parseAppendExpr mkBinop
+parseCmpExpr = do
+  e1 <- parseAppendExpr
+  rest <- many $ choice
+    [ do tok TokEqual; e2 <- parseAppendExpr; return ("=", e2)
+    , do tok TokEqualEqual; e2 <- parseAppendExpr; return ("==", e2)
+    , do op <- infixOpP 0; e2 <- parseAppendExpr; return (op, e2)
+    ]
+  return $ foldl' (\e (op, e2) -> mk op e e2) e1 rest
   where
-    mkBinop op e1 e2 = Expr (EApply (Expr (EIdent (Local op)) emptyLoc) [e1, e2]) (exprLoc e1 <> exprLoc e2)
+    mk op e1 e2 = Expr (EApply (Expr (EIdent (Local op)) emptyLoc) [e1, e2]) (exprLoc e1 <> exprLoc e2)
 
 parseAppendExpr :: Parser Expr
 parseAppendExpr = parseRightAssocOp [1] parseConsExpr mkBinop
@@ -227,9 +234,15 @@ parseConsExpr = do
    ) <|> return e1
 
 parseAddExpr :: Parser Expr
-parseAddExpr = parseLeftAssocOp [2] parseMulExpr mkBinop
+parseAddExpr = do
+  e1 <- parseMulExpr
+  rest <- many $ choice
+    [ do s <- subtractiveP; e2 <- parseMulExpr; return (s, e2)
+    , do op <- infixOpP 2; e2 <- parseMulExpr; return (op, e2)
+    ]
+  return $ foldl' (\e (op, e2) -> mk op e e2) e1 rest
   where
-    mkBinop op e1 e2 = Expr (EApply (Expr (EIdent (Local op)) emptyLoc) [e1, e2]) (exprLoc e1 <> exprLoc e2)
+    mk op e1 e2 = Expr (EApply (Expr (EIdent (Local op)) emptyLoc) [e1, e2]) (exprLoc e1 <> exprLoc e2)
 
 parseMulExpr :: Parser Expr
 parseMulExpr = parseLeftAssocOp [3] parsePowExpr mkBinop
@@ -387,6 +400,7 @@ parseLeftAssocOp levels next mk = do
 parseRightAssocOp :: [Int] -> Parser Expr -> (String -> Expr -> Expr -> Expr) -> Parser Expr
 parseRightAssocOp levels next mk = do
   e1 <- next
-  rest <- many ((do op <- choice (map infixOpP levels)
-                    return op) >>= \op -> next >>= \e2 -> return (op, e2))
-  return $ foldr (\(op, e1') e2 -> mk op e1' e2) e1 (reverse rest)
+  (do op <- choice (map infixOpP levels)
+      e2 <- parseRightAssocOp levels next mk
+      return $ mk op e1 e2
+   ) <|> return e1

@@ -2,6 +2,7 @@
 module CamlParser.Parser.Pattern where
 
 import Control.Monad (void)
+import Data.Maybe (fromMaybe)
 import Text.Megaparsec hiding (Token)
 import CamlParser.Lexer.Token
 import CamlParser.Syntax.Location
@@ -18,8 +19,8 @@ locatedPattern :: Parser (PatternF Pattern) -> Parser Pattern
 locatedPattern p = do
   Located _ loc1 <- lookAhead anySingle
   pf <- p
-  Located _ loc2 <- lookAhead anySingle
-  return $ Pattern pf (loc1 <> loc2)
+  mbLoc <- optional (locatedLoc <$> lookAhead anySingle)
+  return $ Pattern pf (loc1 <> fromMaybe loc1 mbLoc)
 
 parseOrPattern :: Parser Pattern
 parseOrPattern = do
@@ -31,19 +32,23 @@ parseOrPattern = do
 
 parseConsPattern :: Parser Pattern
 parseConsPattern = do
-  p <- parseAppPattern
+  p <- parseCtorAppOrAtomic
   (do tok TokColonColon
       q <- parseConsPattern
       return $ Pattern (PConstr1 "::" (Pattern (PTuple [p, q]) (patLoc p <> patLoc q))) (patLoc p <> patLoc q)
    ) <|> return p
 
-parseAppPattern :: Parser Pattern
-parseAppPattern = do
+parseCtorAppOrAtomic :: Parser Pattern
+parseCtorAppOrAtomic = choice
+  [ try parseCtorApp
+  , parseAtomicPattern
+  ]
+
+parseCtorApp :: Parser Pattern
+parseCtorApp = do
   c <- identP
-  args <- many parseAtomicPattern
-  case args of
-    [] -> return $ Pattern (PVar c) emptyLoc
-    _  -> return $ Pattern (PConstr1 c (mkTuplePat args)) emptyLoc
+  args <- some parseAtomicPattern
+  return $ Pattern (PConstr1 c (mkTuplePat args)) emptyLoc
 
 mkTuplePat :: [Pattern] -> Pattern
 mkTuplePat [p] = p

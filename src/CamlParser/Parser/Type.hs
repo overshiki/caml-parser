@@ -29,17 +29,22 @@ parseAppType = do
   ts <- some parseAtomicType
   case ts of
     [t] -> return t
-    _   -> let args = init ts
-               con = case last ts of
-                       TConstr s _ -> s
-                       TVar s -> s
-                       _ -> error "invalid type constructor in application"
-           in return $ TConstr con args
+    _   -> return $ foldl1 (\acc t2 -> case t2 of
+        TConstr s _ -> TConstr s [acc]
+        TVar s -> TConstr s [acc]
+        _ -> error "invalid type constructor in application") ts
 
 parseAtomicType :: Parser TypeExpr
 parseAtomicType = choice
   [ TVar <$> (tok TokQuote >> identP)
   , TConstr <$> identP <*> return []
   , TConstr . show <$> intP <*> return []
-  , parens parseType
+  , do tok TokLParen
+       t <- parseType
+       (do comma
+           ts <- sepBy1 parseType comma
+           tok TokRParen
+           c <- identP
+           return $ TConstr c (t : ts)
+        ) <|> (tok TokRParen >> return t)
   ]
